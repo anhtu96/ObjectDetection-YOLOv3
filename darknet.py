@@ -14,7 +14,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.autograd import Variable
 import cv2
 from util import *
 
@@ -244,7 +243,6 @@ def get_test_input():
     img_ =  img[:,:,::-1].transpose((2,0,1))  # BGR -> RGB | H X W C -> C X H X W 
     img_ = img_[np.newaxis,:,:,:]/255.0       #Add a channel at 0 (for batch) | Normalise
     img_ = torch.from_numpy(img_).float()     #Convert to float
-    img_ = Variable(img_)                     # Convert to Variable
     return img_
 
 model = Net("darknet/cfg/yolov3.cfg")
