@@ -66,8 +66,10 @@ def create_modules(blocks):
             activation = layer['activation']
             try:
                 batchnorm = int(layer['batch_normalize'])
+                bias = False
             except:
                 batchnorm = 0
+                bias = True
             filters = int(layer['filters'])
             kernel_size = int(layer['size'])
             stride = int(layer['stride'])
@@ -80,7 +82,7 @@ def create_modules(blocks):
             else:
                 padding = kernel_size // 2
             
-            conv = nn.Conv2d(prev_filters, filters, kernel_size, stride, padding)
+            conv = nn.Conv2d(prev_filters, filters, kernel_size, stride, padding, bias=bias)
             module.add_module('conv_{}'.format(idx), conv)
             if batchnorm:
                 bn = nn.BatchNorm2d(filters)
@@ -177,6 +179,65 @@ class Net(nn.Module):
             outputs[idx] = x
         return detections
     
+    def load_weights(self, weightfile):
+        fp = open(weightfile, "rb")
+        track = 0 # track is the total number of params which have been already used
+        #The first 5 values are header information 
+        # 1. Major version number
+        # 2. Minor Version Number
+        # 3. Subversion number 
+        # 4,5. Images seen by the network (during training)
+        header = np.fromfile(fp, dtype = np.int32, count = 5)
+        params = np.fromfile(fp, dtype = np.float32)
+        fp.close()
+        for i in range(len(self.module_list)):
+            block = self.blocks[i+1]  # ignore the first net info block
+            if block['type'] == 'convolutional':
+                try:
+                    batchnorm = int(block['batch_normalize'])
+                except:
+                    batchnorm = 0
+                model = self.module_list[i]
+                
+                # CNN module contains: CNN, batchnorm, leaky ReLU (no weights -> ignore)
+                conv = model[0]
+                if batchnorm:
+                    bn = model[1]
+                    num_bn_params = bn.weight.numel()
+                    
+                    # get parameters, then reshape to the same shape as parameter tensors
+                    bn_bias = torch.from_numpy(params[track:track+num_bn_params]).view_as(bn.bias)
+                    track += num_bn_params
+                    bn_weights = torch.from_numpy(params[track:track+num_bn_params]).view_as(bn.weight)
+                    track += num_bn_params
+                    bn_running_mean = torch.from_numpy(params[track:track+num_bn_params]).view_as(bn.running_mean)
+                    track += num_bn_params
+                    bn_running_var = torch.from_numpy(params[track:track+num_bn_params]).view_as(bn.running_var)
+                    track += num_bn_params
+                    
+                    # copy values into parameter tensors
+                    bn.bias.data.copy_(bn_bias)
+                    bn.weight.data.copy_(bn_weights)
+                    bn.running_mean.data.copy_(bn_running_mean)
+                    bn.running_var.data.copy_(bn_running_var)
+                else:
+                    num_conv_bias = conv.bias.numel()
+                    conv_bias = torch.from_numpy(params[track:track+num_conv_bias]).view_as(conv.bias)
+                    track += num_conv_bias
+                    
+                    conv.bias.data.copy_(conv_bias)
+                
+                num_conv_weights = conv.weight.numel()
+                conv_weights = torch.from_numpy(params[track:track+num_conv_weights]).view_as(conv.weight)
+                track += num_conv_weights
+                conv.weight.data.copy_(conv_weights)
+                
+        print('* Weights have been successfully loaded!\
+              \n- Number of model\'s params: %d\
+              \n- Number of cfg\'s params: %d' %(track, len(params)))
+                
+    
+    
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
     img = cv2.resize(img, (416,416))          #Resize to the input dimension
@@ -187,6 +248,7 @@ def get_test_input():
     return img_
 
 model = Net("darknet/cfg/yolov3.cfg")
-inp = get_test_input()
-pred = model(inp, torch.cuda.is_available())
-print (pred)
+model.load_weights('yolov3.weights')
+#inp = get_test_input()
+#pred = model(inp, torch.cuda.is_available())
+#print (pred)
