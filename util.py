@@ -49,6 +49,66 @@ def process_prediction(x, dims, anchors, num_classes, CUDA):
     # Calculate class score
     x[:,:,5:] = torch.sigmoid(x[:,:,5:])
     
-    # Scale back to normal size
+    # Scale back to normal size for bx, by, bw, bh
     x[:,:,:4] *= scale_h
     return x
+
+def unique_class(classes):
+    return torch.unique(classes, dim=-1)
+
+def write_results(prediction, thresh_pred=0.4, iou_thresh=0.5):
+    batch_size = prediction.size(0)
+    write = False
+    
+    conf_mask = (prediction[:,:,4] > thresh_pred).float().unsqueeze(2)
+    pred_mask = conf_mask * prediction
+    
+    pred_box_corners = pred_mask.copy_(pred_mask)
+    pred_box_corners[:,:,0] = pred_mask[:,:,0] - pred_mask[:,:,2]/2
+    pred_box_corners[:,:,1] = pred_mask[:,:,1] - pred_mask[:,:,3]/2
+    pred_box_corners[:,:,2] = pred_mask[:,:,0] + pred_mask[:,:,2]/2
+    pred_box_corners[:,:,3] = pred_mask[:,:,1] + pred_mask[:,:,3]/2
+    
+    for i in range(batch_size):
+        img_pred = pred_box_corners[i]
+        scores, classes = torch.max(img_pred[:,5:], dim=-1, keepdim=True)
+        img_pred = torch.cat((img_pred[:,:5], scores.float(), classes.float()), dim=1)
+        nonzero_idx = torch.nonzero(img_pred[:,4]).squeeze(1)
+        if (nonzero_idx.size(0) > 0):
+            img_pred_ = img_pred[nonzero_idx]
+        img_classes = unique_class(img_pred_[:,-1])
+        for cl in img_classes:
+            cl_mask = img_pred_ * (img_pred_[:,-1] == cl).float().unsqueeze(1)
+            cl_mask_nonzero = torch.nonzero(cl_mask[:,-2]).squeeze()
+            img_pred_class = img_pred_[cl_mask_nonzero]
+            conf_sort_val, conf_sort_idx = torch.sort(img_pred_class[:,4], descending=True)
+            img_pred_class = img_pred_class[conf_sort_idx]
+            len_img_pred = img_pred_class.size(0)
+            for idx in range(len_img_pred):
+                iou = calc_iou(img_pred_class[i], img_pred_class[idx+1:])
+                iou_mask = (iou < iou_thresh).float().unsqueeze(1)
+                img_pred_class[idx+1:] *= iou_mask
+                nonzero_idx = torch.nonzero(img_pred_class[:,4]).squeeze()
+                img_pred_class = img_pred_class[nonzero_idx]
+            batch_ind = img_pred_class.new(img_pred_class.size(0), 1).fill_(i)      #Repeat the batch_id for as many detections of the class cls in the image
+            seq = batch_ind, img_pred_class
+            if not write:
+                output = torch.cat(seq,1)
+                write = True
+            else:
+                out = torch.cat(seq,1)
+                output = torch.cat((output,out))
+        return output
+                
+                
+def calc_iou(box1, boxes2):
+    xi1 = torch.max(box1[0], boxes2[:,0])
+    yi1 = torch.max(box1[1], boxes2[:,1])
+    xi2 = torch.min(box1[2], boxes2[:,2])
+    yi2 = torch.min(box1[3], boxes2[:,3])
+    intersection = torch.clamp(xi2-xi1, min=0) * torch.clamp(yi2-yi1, min=0)
+    area_box1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area_boxes2 = (boxes2[:,2] - boxes2[:,0]) * (boxes2[:,3] - boxes2[:,1])
+    union = area_box1 + area_boxes2 - intersection
+    iou = intersection / union
+    return iou
