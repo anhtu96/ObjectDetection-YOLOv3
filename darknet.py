@@ -146,7 +146,7 @@ class Net(nn.Module):
     def __str__(self):
         return ('** Information about the network: ' + str(self.net_info) + '\n\n' +
                 '** All layers of the network: \n' + str(self.module_list))
-    def forward(self, x, CUDA):
+    def forward(self, x):
         layers = self.blocks[1:] # except the 'net' module
         outputs = {}
         yolo_calc = 0
@@ -169,7 +169,7 @@ class Net(nn.Module):
                 num_classes = int(layer['classes'])
                 # x has shape (batch_size, (4+1+80)*3, N, N)
                 # in which, 4: bbox offsets, 1: objectness score, 80: classes, 3: num of boxes, N: box's dimension
-                x = process_prediction(x, inp_dims, anchors, num_classes, CUDA)
+                x = process_prediction(x, inp_dims, anchors, num_classes)
                 if not yolo_calc:              #if no collector has been intialised. 
                     detections = x
                     yolo_calc = 1
@@ -250,5 +250,4 @@ model = None
 model = Net("darknet/cfg/yolov3.cfg")
 #model.load_weights('yolov3.weights')
 inp = get_test_input()
-pred = model(inp, torch.cuda.is_available())
-print (pred)
+pred = model(inp)
