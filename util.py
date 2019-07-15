@@ -14,7 +14,7 @@ from torch.autograd import Variable
 import numpy as np
 import cv2 
 
-def process_prediction(x, dims, anchors, num_classes, CUDA):
+def process_prediction(x, dims, anchors, num_classes):
     num_anchors = len(anchors)
     fmap_size = x.size(2)
     height, width = dims[0], dims[1]
@@ -80,16 +80,17 @@ def write_results(prediction, thresh_pred=0.4, iou_thresh=0.5):
         for cl in img_classes:
             cl_mask = img_pred_ * (img_pred_[:,-1] == cl).float().unsqueeze(1)
             cl_mask_nonzero = torch.nonzero(cl_mask[:,-2]).squeeze()
-            img_pred_class = img_pred_[cl_mask_nonzero]
+            img_pred_class = img_pred_[cl_mask_nonzero].view(-1,7)
             conf_sort_val, conf_sort_idx = torch.sort(img_pred_class[:,4], descending=True)
-            img_pred_class = img_pred_class[conf_sort_idx]
+            img_pred_class = img_pred_class[conf_sort_idx].view(-1, 7)
             len_img_pred = img_pred_class.size(0)
+            
             for idx in range(len_img_pred):
-                iou = calc_iou(img_pred_class[i], img_pred_class[idx+1:])
+                iou = calc_iou(img_pred_class[i], img_pred_class[(idx+1):])
                 iou_mask = (iou < iou_thresh).float().unsqueeze(1)
                 img_pred_class[idx+1:] *= iou_mask
                 nonzero_idx = torch.nonzero(img_pred_class[:,4]).squeeze()
-                img_pred_class = img_pred_class[nonzero_idx]
+                img_pred_class = img_pred_class[nonzero_idx].view(-1,7)
             batch_ind = img_pred_class.new(img_pred_class.size(0), 1).fill_(i)      #Repeat the batch_id for as many detections of the class cls in the image
             seq = batch_ind, img_pred_class
             if not write:
