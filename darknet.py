@@ -94,7 +94,7 @@ def create_modules(blocks):
         # Upsample layer
         elif layer['type'] == 'upsample':
             stride = int(layer['stride'])
-            upsample = nn.Upsample(scale_factor=2, mode='bilinear')
+            upsample = nn.Upsample(scale_factor=2, mode='nearest')
             module.add_module('upsample_{}'.format(idx), upsample)
             
         
@@ -136,7 +136,7 @@ def create_modules(blocks):
         output_filters.append(filters)
     return (net_info, module_list)
             
-# create network
+## create network
 class Net(nn.Module):
     def __init__(self, filename):
         super(Net, self).__init__()
@@ -235,8 +235,7 @@ class Net(nn.Module):
               \n- Number of model\'s params: %d\
               \n- Number of cfg\'s params: %d' %(track, len(params)))
     
-                
-    
+
     
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
@@ -246,8 +245,8 @@ def get_test_input():
     img_ = torch.from_numpy(img_).float()     #Convert to float
     return img_
 
-model = None
-model = Net("darknet/cfg/yolov3.cfg")
-#model.load_weights('yolov3.weights')
-inp = get_test_input()
-pred = model(inp)
+#model = None
+#model = Net("darknet/cfg/yolov3.cfg")
+##model.load_weights('yolov3.weights')
+#inp = get_test_input()
+#pred = model(inp)
