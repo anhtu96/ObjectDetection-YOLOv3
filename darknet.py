@@ -169,6 +169,8 @@ class Net(nn.Module):
                 num_classes = int(layer['classes'])
                 # x has shape (batch_size, (4+1+80)*3, N, N)
                 # in which, 4: bbox offsets, 1: objectness score, 80: classes, 3: num of boxes, N: box's dimension
+                
+                x = x.data  # just need the data, seperate from autograd
                 x = process_prediction(x, inp_dims, anchors, num_classes)
                 if not yolo_calc:              #if no collector has been intialised. 
                     detections = x
@@ -217,7 +219,7 @@ class Net(nn.Module):
                     # copy values into parameter tensors
                     bn.bias.data.copy_(bn_bias)
                     bn.weight.data.copy_(bn_weights)
-                    bn.running_mean.data.copy_(bn_running_mean)
+                    bn.running_mean.detach().copy_(bn_running_mean)
                     bn.running_var.data.copy_(bn_running_var)
                 else:
                     num_conv_bias = conv.bias.numel()
@@ -246,7 +248,7 @@ def get_test_input():
     return img_
 
 #model = None
-#model = Net("darknet/cfg/yolov3.cfg")
+#model = Net("cfg/yolov3.cfg")
 ##model.load_weights('yolov3.weights')
 #inp = get_test_input()
 #pred = model(inp)
