@@ -15,6 +15,7 @@ from util import *
 import argparse
 import os 
 import os.path as osp
+#from darknet import Darknet
 from darknet import Net
 import pickle as pkl
 import pandas as pd
@@ -39,7 +40,7 @@ def arg_parse():
     parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
     parser.add_argument("--cfg", dest = 'cfgfile', help = 
                         "Config file",
-                        default = "darknet/cfg/yolov3.cfg", type = str)
+                        default = "cfg/yolov3.cfg", type = str)
     parser.add_argument("--weights", dest = 'weightsfile', help = 
                         "weightsfile",
                         default = "yolov3.weights", type = str)
@@ -86,11 +87,14 @@ batch_size = int(args.bs)
 confidence = float(args.confidence)
 nms_thesh = float(args.nms_thresh)
 start = 0
+num_classes = 80
+CUDA = torch.cuda.is_available()
 
 classes = load_classes('datasets/coco.names')
 
 #Set up the neural network
 print("Loading network.....")
+#model = Darknet(args.cfgfile)
 model = Net(args.cfgfile)
 model.load_weights(args.weightsfile)
 print("Network successfully loaded")
@@ -133,14 +137,15 @@ if batch_size != 1:
 
 write = 0
 start_det_loop = time.time()
-pred = model(im_batches[0])
 for i, batch in enumerate(im_batches):
     #load the image 
     start = time.time()
 
+#    prediction = model(batch, CUDA)
     prediction = model(batch)
 
-    prediction = write_results(prediction, confidence, iou_thresh = nms_thesh)
+#    prediction = write_results(prediction, confidence, 80, nms_thesh)
+    prediction = write_results(prediction, confidence, num_classes, nms_thesh)
 
     end = time.time()
 
@@ -168,3 +173,4 @@ for i, batch in enumerate(im_batches):
         print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
         print("----------------------------------------------------------")
         
+torch.cuda.empty_cache()
